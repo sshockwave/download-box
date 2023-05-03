@@ -11,13 +11,12 @@ function useRender() {
 }
 
 function humanSize(bytes: number) {
-  const step = 1024;
   const units = ['B', 'KiB', 'MiB', 'GiB', 'TiB'];
   let i = 0;
-  for (; bytes >= step; i++) {
-    bytes /= step;
+  for (; bytes >= 1000; i++) {
+    bytes /= 1024;
   }
-  return `${i === 0 ? bytes : bytes.toFixed(2)} ${units[i]}`;
+  return `${i === 0 ? bytes : bytes.toFixed(2)}${units[i]}`;
 }
 
 function retry(item: DownloadItem) {
@@ -123,6 +122,7 @@ function Item({ item: _item, onChange }: { item: DownloadItem, onChange: (cb: (d
   });
   const render = useRender();
   const [icon, setIcon] = useState(placeholder_gif);
+  const [speed, setSpeed] = useState(0);
   useEffect(() => {
     download_api.getFileIcon(item.id, {
       size: 32,
@@ -131,16 +131,31 @@ function Item({ item: _item, onChange }: { item: DownloadItem, onChange: (cb: (d
     });
   }, []);
   useEffect(() => {
+    let last_bytes = item.bytesReceived;
+    let last_time = Date.now();
+    let speed = 0;
+    let speed_duration = 0;
     add_tick(item);
     function add_tick(item: DownloadItem) {
       if (item.state === 'in_progress' && !item.paused) {
         setTimeout(update, 100);
+      } else {
+        speed = 0;
       }
     }
     async function update() {
       const items = await download_api.search({
         id: item.id,
       });
+      const chunk_size = items[0].bytesReceived - last_bytes;
+      if (chunk_size !== 0) {
+        const period = Date.now() - last_time;
+        last_time += period;
+        speed = (speed * speed_duration + chunk_size) / (speed_duration + period);
+        speed_duration = Math.min(speed_duration + period, 5000);
+        setSpeed(chunk_size / period * 1000);
+        last_bytes = items[0].bytesReceived;
+      }
       setItem(items[0]);
       add_tick(items[0]);
     }
@@ -148,19 +163,20 @@ function Item({ item: _item, onChange }: { item: DownloadItem, onChange: (cb: (d
   const available = item.state === 'complete' && item.exists;
   const errored = item.state === 'interrupted' || item.state === 'complete' && !item.exists;
   const basename = item.filename.split('/').pop();
-  const maskImage = 'linear-gradient(to right, #000 80%, transparent 98%)';
+  const maskImage = 'linear-gradient(to right, #000 70%, transparent 100%)';
   return <div className={`
-    flex flex-row flex-nowrap hover:bg-slate-100 p-2
-    ${errored ? 'text-black/50' : ''}
+    flex flex-row flex-nowrap p-2 space-x-2 items-center
+    hover:bg-slate-100
+    ${errored ? 'text-black/30' : ''}
     ${available ? 'cursor-pointer' : ''}
   `} onClick={() => {
     if (available) {
       download_api.open(item.id);
     }
   }}>
-    <img src={icon} className={`w-6 h-6 mr-2 ${errored ? 'grayscale opacity-50' : ''}`} />
-    <div className='grow relative overflow-x-hidden mr-2'>
-      <div className='relative' style={{
+    <img src={icon} className={`w-8 h-8 ${errored ? 'grayscale opacity-30' : ''}`} />
+    <div className='grow relative overflow-x-hidden'>
+      <div className='' style={{
         maskImage, WebkitMaskImage: maskImage,
         whiteSpace: 'nowrap',
       }}>
@@ -176,20 +192,25 @@ function Item({ item: _item, onChange }: { item: DownloadItem, onChange: (cb: (d
         />
         : <div className='h-1' />
       }
-      <div className='flex flex-row flex-nowrap'>
+      <div className='flex flex-row flex-nowrap text-xs'>
         {item.state === 'in_progress' && !item.paused && <div className='mr-1'>
-          {/*speed*/}
+          {`${humanSize(speed)}/s`}
         </div>}
-        <div className='ml-auto'>
-          {humanSize(item.fileSize)}
+        <div className='ml-auto mr-1'>
+          {`${item.state === 'in_progress'
+            ? `${humanSize(item.bytesReceived)}/`
+            : ''
+            }${humanSize(item.fileSize)}`}
         </div>
-      </div>
-    </div>
+        <div>
     {item.danger !== 'safe' && item.danger !== 'accepted' ? <button
       onClick={() => download_api.acceptDanger(item.id)}
     >
       accept danger
     </button> : actions[item.state](item, render)}
+        </div>
+      </div>
+    </div>
   </div>;
 }
 
@@ -222,10 +243,10 @@ function App() {
       setItems(items.current.filter((item) => item.id !== id));
     });
   }, []);
-  return <div className='w-72 font-sans'>
+  return <div className='w-72 font-sans text-sm'>
     <div className='flex flex-row flex-nowrap p-2'>
       <div className='mr-2'>
-        <FontAwesomeIcon icon={faSearch} className='w-6' />
+        <FontAwesomeIcon icon={faSearch} className='w-8' />
       </div>
       <input
         type='search'

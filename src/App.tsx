@@ -1,6 +1,6 @@
 import { useEffect, useReducer, useState, useRef } from 'react'
 import { FontAwesomeIcon, FontAwesomeIconProps } from '@fortawesome/react-fontawesome';
-import { faCloudArrowDown, faFolderOpen, faPause, faPlay, faRotate, faUpRightFromSquare, faXmark, faTrashCan, faSearch } from '@fortawesome/free-solid-svg-icons';
+import { faFolderOpen, faPause, faPlay, faLink, faUpRightFromSquare, faXmark, faTrashCan, faSearch } from '@fortawesome/free-solid-svg-icons';
 
 type DownloadItem = chrome.downloads.DownloadItem;
 type DownloadDelta = chrome.downloads.DownloadDelta;
@@ -17,12 +17,6 @@ function humanSize(bytes: number) {
     bytes /= 1024;
   }
   return `${i === 0 ? bytes : bytes.toFixed(2)}${units[i]}`;
-}
-
-function retry(item: DownloadItem) {
-  download_api.download({
-    url: item.url,
-  });
 }
 
 function IconButton({ icon, onClick, buttonClass, ...rest }: FontAwesomeIconProps & { onClick?: () => void, buttonClass?: string }) {
@@ -57,12 +51,9 @@ const actions = {
       onClick={() => {
       download_api.resume(item.id);
       }}
-    /> : <IconButton
-      icon={faRotate}
-      onClick={() => {
-      retry(item);
-      }}
-      />}
+    /> : <a href={item.url} target='_blank'>
+      <FontAwesomeIcon icon={faLink} />
+    </a>}
       <IconButton
         icon={faXmark}
         onClick={() => {
@@ -89,12 +80,9 @@ const actions = {
         }}
       />
     </> : <>
-      <IconButton
-      icon={faCloudArrowDown}
-      onClick={() => {
-      retry(item);
-      }}
-      />
+      <a href={item.url} target='_blank'>
+        <FontAwesomeIcon icon={faLink} />
+      </a>
       <IconButton
         icon={faXmark}
         onClick={() => {
@@ -176,7 +164,7 @@ function Item({ item: _item, onChange }: { item: DownloadItem, onChange: (cb: (d
   }}>
     <img src={icon} className={`w-8 h-8 ${errored ? 'grayscale opacity-30' : ''}`} />
     <div className='grow relative overflow-x-hidden'>
-      <div className='' style={{
+      <div className='mb-0' style={{
         maskImage, WebkitMaskImage: maskImage,
         whiteSpace: 'nowrap',
       }}>
@@ -185,17 +173,20 @@ function Item({ item: _item, onChange }: { item: DownloadItem, onChange: (cb: (d
         </span>
       </div>
       {item.state === 'in_progress'
-        ? <progress
-          className='h-1 w-full'
-          value={item.bytesReceived}
-          max={item.totalBytes}
-        />
+        ? <div className='w-full relative bg-gray-300 rounded-full'>
+          <div className='h-1 bg-sky-500 rounded-full transition-all duration-300' style={{
+            width: `${item.bytesReceived / item.totalBytes * 100}%`,
+          }}/>
+        </div>
         : <div className='h-1' />
       }
       <div className='flex flex-row flex-nowrap text-xs'>
-        {item.state === 'in_progress' && !item.paused && <div className='mr-1'>
-          {`${humanSize(speed)}/s`}
-        </div>}
+        <div className='mr-1'>
+          {(item.state === 'in_progress' && !item.paused && `${humanSize(speed)}/s`)
+            || (item.state == 'complete' && !item.exists && `Deleted`)
+            || (item.state == 'interrupted' && item.error)
+          }
+        </div>
         <div className='ml-auto mr-1'>
           {`${item.state === 'in_progress'
             ? `${humanSize(item.bytesReceived)}/`
@@ -227,6 +218,7 @@ function App() {
   }
   useEffect(() => {
     download_api.search({
+      orderBy: ['-startTime'],
     }).then((items) => {
       setItems(items);
     });

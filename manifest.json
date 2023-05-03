@@ -1,8 +1,15 @@
 {
   "manifest_version": 3,
-  "name": "CRXJS React Vite Example",
+  "name": "Download Box",
   "version": "1.0.0",
+  "background": {
+    "service_worker": "src/background.ts"
+  },
   "action": {
     "default_popup": "index.html"
-  }
+  },
+  "permissions": [
+    "downloads",
+    "downloads.shelf"
+  ]
 }

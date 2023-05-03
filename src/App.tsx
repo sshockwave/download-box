@@ -1,6 +1,6 @@
 import { useEffect, useReducer, useState, useRef } from 'react'
 import { FontAwesomeIcon, FontAwesomeIconProps } from '@fortawesome/react-fontawesome';
-import { faFolderOpen, faPause, faPlay, faLink, faUpRightFromSquare, faXmark, faTrashCan, faSearch } from '@fortawesome/free-solid-svg-icons';
+import { faFolderOpen, faPause, faPlay, faLink, faUpRightFromSquare, faXmark, faTrashCan, faSearch, faDownload } from '@fortawesome/free-solid-svg-icons';
 
 type DownloadItem = chrome.downloads.DownloadItem;
 type DownloadDelta = chrome.downloads.DownloadDelta;

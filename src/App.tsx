@@ -1,13 +1,22 @@
 import { useEffect, useReducer, useState } from 'react'
-import './App.css'
 import { FontAwesomeIcon, FontAwesomeIconProps } from '@fortawesome/react-fontawesome';
-import { faCloudArrowDown, faFolderOpen, faPause, faPlay, faRotate, faUpRightFromSquare, faXmark, faTrashCan } from '@fortawesome/free-solid-svg-icons';
+import { faCloudArrowDown, faFolderOpen, faPause, faPlay, faRotate, faUpRightFromSquare, faXmark, faTrashCan, faSearch } from '@fortawesome/free-solid-svg-icons';
 
 type DownloadItem = chrome.downloads.DownloadItem;
 const download_api = chrome.downloads;
 
 function useRender() {
   return useReducer((x) => x + 1, 0)[1];
+}
+
+function humanSize(bytes: number) {
+  const step = 1024;
+  const units = ['B', 'KiB', 'MiB', 'GiB', 'TiB'];
+  let i = 0;
+  for (; bytes >= step; i++) {
+    bytes /= step;
+  }
+  return `${i === 0 ? bytes : bytes.toFixed(2)} ${units[i]}`;
 }
 
 function retry(item: DownloadItem) {
@@ -17,8 +26,8 @@ function retry(item: DownloadItem) {
   });
 }
 
-function IconButton({ icon, onClick, ...rest }: FontAwesomeIconProps & { onClick?: () => void }) {
-  return <button onClick={onClick}>
+function IconButton({ icon, onClick, buttonClass, ...rest }: FontAwesomeIconProps & { onClick?: () => void, buttonClass?: string }) {
+  return <button onClick={onClick} className={buttonClass}>
     <FontAwesomeIcon icon={icon} fixedWidth {...rest} />
   </button>;
 }
@@ -79,11 +88,31 @@ const actions = {
   },
 };
 
+const placeholder_gif = 'data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=';
 function Item({ item }: { item: DownloadItem }) {
   const render = useRender();
-  return <div>
-    {item.filename}
+  const [icon, setIcon] = useState(placeholder_gif);
+  useEffect(() => {
+    chrome.downloads.getFileIcon(item.id, {
+      size: 32,
+    }).then((icon) => {
+      setIcon(icon);
+    });
+  }, []);
+  return <div className='flex flex-row flex-nowrap hover:bg-slate-100 p-2'>
+    <img src={icon} className='w-6 h-6 mr-2' />
+    <div className='grow'>
+      {item.filename.split('/').pop()}
     {item.state === 'in_progress' && <progress value={item.bytesReceived} max={item.totalBytes} />}
+      <div className='flex flex-row flex-nowrap'>
+        {item.state === 'in_progress' && !item.paused && <div className='mr-1'>
+          {/*speed*/}
+        </div>}
+        <div className='ml-auto'>
+          {humanSize(item.fileSize)}
+        </div>
+      </div>
+    </div>
     {item.danger !== 'safe' && item.danger !== 'accepted' ? <button
       onClick={() => {
         download_api.acceptDanger(item.id);
@@ -118,13 +147,28 @@ function App() {
         }
       }
     });
+    download_api.onErased.addListener((id) => {
+      setItems(items.filter((item) => item.id !== id));
+    });
   }, []);
-  return <div>
-    <div>
-      <div>
-        Download
+  return <div className='w-72 font-sans'>
+    <div className='flex flex-row flex-nowrap p-2'>
+      <div className='mr-2'>
+        <FontAwesomeIcon icon={faSearch}/>
       </div>
+      <input
+        type='search'
+        placeholder='search'
+        className='grow mr-2'
+        onChange={(e) => {
+          const query = e.target.value === '' ? {} : {
+            query: [e.target.value],
+          };
+          download_api.search(query).then(setItems);
+        }}
+      />
       <IconButton
+        buttonClass='ml-auto'
         icon={faUpRightFromSquare}
         onClick={() => {
         chrome.tabs.create({
@@ -133,7 +177,7 @@ function App() {
         }}
       />
     </div>
-    <ul>
+    <ul className='list-none'>
       {Array.from(items.values(), (item) => <li key={item.id}>
         <Item item={item} />
       </li>)}

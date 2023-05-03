@@ -1,5 +1,7 @@
 import { useEffect, useReducer, useState } from 'react'
 import './App.css'
+import { FontAwesomeIcon, FontAwesomeIconProps } from '@fortawesome/react-fontawesome';
+import { faCloudArrowDown, faFolderOpen, faPause, faPlay, faRotate, faUpRightFromSquare, faXmark, faTrashCan } from '@fortawesome/free-solid-svg-icons';
 
 type DownloadItem = chrome.downloads.DownloadItem;
 const download_api = chrome.downloads;
@@ -15,54 +17,65 @@ function retry(item: DownloadItem) {
   });
 }
 
+function IconButton({ icon, onClick, ...rest }: FontAwesomeIconProps & { onClick?: () => void }) {
+  return <button onClick={onClick}>
+    <FontAwesomeIcon icon={icon} fixedWidth {...rest} />
+  </button>;
+}
+
 const actions = {
   in_progress(item: DownloadItem) {
     return <>
-      {item.paused ? <button onClick={() => {
-        download_api.resume(item.id);
-      }}>
-        continue
-      </button> : <button onClick={() => {
+      {item.paused ? <IconButton
+        icon={faPlay}
+        onClick={() => {
+          download_api.resume(item.id);
+        }}
+      /> : <IconButton
+        icon={faPause}
+        onClick={() => {
         download_api.pause(item.id);
-      }}>
-        pause
-      </button>}
-      <button onClick={() => {
+      }}
+      />}
+      <IconButton icon={faXmark} onClick={() => {
         download_api.cancel(item.id);
-      }}>
-        cancel
-      </button>
+      }}/>
     </>;
   },
   interrupted(item: DownloadItem) {
-    return item.canResume ? <button onClick={() => {
+    return item.canResume ? <IconButton
+      icon={faPlay}
+      onClick={() => {
       download_api.resume(item.id);
-    }}>
-      resume
-    </button> : <button onClick={() => {
+      }}
+    /> : <IconButton
+      icon={faRotate}
+      onClick={() => {
       retry(item);
-    }}>
-      retry
-    </button>;
+      }}
+    />;
   },
   complete(item: DownloadItem, render: () => void) {
     return item.exists ? <>
-      <button onClick={() => {
+      <IconButton
+        icon={faFolderOpen}
+        onClick={() => {
         download_api.show(item.id);
-      }}>
-        open folder
-      </button>
-      <button onClick={() => {
+        }}
+      />
+      <IconButton
+        icon={faTrashCan}
+        onClick={() => {
         download_api.removeFile(item.id);
         render();
-      }}>
-        delete file
-      </button>
-    </> : <button onClick={() => {
+        }}
+      />
+    </> : <IconButton
+      icon={faCloudArrowDown}
+      onClick={() => {
       retry(item);
-    }}>
-      re-download
-    </button>;
+      }}
+    />;
   },
 };
 
@@ -111,13 +124,14 @@ function App() {
       <div>
         Download
       </div>
-      <button onClick={() => {
+      <IconButton
+        icon={faUpRightFromSquare}
+        onClick={() => {
         chrome.tabs.create({
           url: 'chrome://downloads/',
         });
-      }}>
-        open download page
-      </button>
+        }}
+      />
     </div>
     <ul>
       {Array.from(items.values(), (item) => <li key={item.id}>

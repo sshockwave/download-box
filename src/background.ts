@@ -32,6 +32,7 @@ function drawIcon(progress: number | null = null, size = 32) {
 }
 
 let next_tick: number | null = null;
+let last_progress: number | null = null;
 async function updateIcon() {
   const items = await chrome.downloads.search({
     state: 'in_progress',
@@ -40,7 +41,14 @@ async function updateIcon() {
     ([cnt, all], { bytesReceived, totalBytes }) => [cnt + bytesReceived, all + totalBytes],
     [0, 0],
   );
-  await chrome.action.setIcon({ imageData: drawIcon(all !== 0 ? cnt / all : null) });
+  const new_progress = all !== 0 ? cnt / all : null;
+  await chrome.action.setIcon({ imageData: drawIcon(new_progress) });
+  if (last_progress !== null && new_progress === null) {
+    chrome.action.setBadgeBackgroundColor({ color: '#008800' });
+    chrome.action.setBadgeTextColor({ color: '#ffffff' });
+    chrome.action.setBadgeText({ text: '+' });
+  }
+  last_progress = new_progress;
   if (all !== 0 && next_tick === null) {
     next_tick = setTimeout(() => {
       next_tick = null;

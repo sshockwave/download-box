@@ -1,6 +1,7 @@
 import { useEffect, useReducer, useState, useRef, MouseEventHandler } from 'react'
 import { FontAwesomeIcon, FontAwesomeIconProps } from '@fortawesome/react-fontawesome';
-import { faFolderOpen, faPause, faPlay, faLink, faUpRightFromSquare, faXmark, faTrashCan, faSearch, faCircleCheck, faStop } from '@fortawesome/free-solid-svg-icons';
+import { faFolderOpen, faPause, faPlay, faLink, faUpRightFromSquare, faXmark, faTrashCan, faSearch, faCircleCheck, faStop, faTrashCanArrowUp, faFolder } from '@fortawesome/free-solid-svg-icons';
+import classes from './App.module.css';
 
 type DownloadItem = chrome.downloads.DownloadItem;
 type DownloadDelta = chrome.downloads.DownloadDelta;
@@ -19,13 +20,26 @@ function humanSize(bytes: number) {
   return `${i === 0 ? bytes : bytes.toFixed(2)}${units[i]}`;
 }
 
-function IconButton({ icon, onClick, buttonClass, ...rest }: FontAwesomeIconProps & { onClick?: MouseEventHandler<HTMLButtonElement>, buttonClass?: string }) {
-  return <button onClick={(ev) => {
+function IconButton({ icon, onClick, buttonClass, hoverIcon, tag, buttonRest, ...rest }: FontAwesomeIconProps & {
+  onClick?: () => void,
+  buttonClass?: string,
+  hoverIcon?: FontAwesomeIconProps['icon'],
+  buttonRest?: {},
+  tag?: keyof JSX.IntrinsicElements,
+}) {
+  const [hover, setHover] = useState(false);
+  const Tag = tag ?? 'button';
+  return <Tag onClick={(ev) => {
     ev.stopPropagation();
-    onClick?.(ev);
-  }} className={`hover:text-black dark:hover:text-white ${buttonClass}`}>
-    <FontAwesomeIcon icon={icon} fixedWidth {...rest} />
-  </button>;
+    onClick?.();
+  }}
+    className={`hover:text-black dark:hover:text-white ${classes['hover-bg']} ${buttonClass ?? ''}`}
+    onMouseEnter={() => setHover(true)}
+    onMouseLeave={() => setHover(false)}
+    {...(buttonRest ?? {})}
+  >
+    <FontAwesomeIcon icon={hover ? hoverIcon ?? icon : icon} fixedWidth {...rest} />
+  </Tag>;
 }
 
 const placeholder_gif = 'data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=';
@@ -41,7 +55,6 @@ function Item({ item: _item, onChange }: { item: DownloadItem, onChange: (cb: (d
       ),
     });
   });
-  const render = useRender();
   const [icon, setIcon] = useState(placeholder_gif);
   const [speed, setSpeed] = useState(0);
   useEffect(() => {
@@ -86,33 +99,35 @@ function Item({ item: _item, onChange }: { item: DownloadItem, onChange: (cb: (d
   const basename = item.filename.split('/').pop();
   const maskImage = 'linear-gradient(to right, #000 70%, transparent 100%)';
   return <div className={`
-    flex flex-row flex-nowrap p-2 space-x-2 items-center
+    flex flex-row flex-nowrap py-2 items-center justify-evenly
     ${errored ? 'text-black/30 dark:text-white/30' : ''}
-    ${available ? 'cursor-pointer hover:underline' : ''}
-  `} onClick={() => {
-    if (available) {
-      download_api.open(item.id);
-    }
-  }}>
+  `}>
     <img src={icon} className={`w-8 h-8 ${errored ? 'grayscale opacity-30' : ''}`} />
-    <div className='grow relative overflow-x-hidden'>
-      <div className='mb-0' style={{
+    <div className='relative'>
+      <div className='mb-0 w-64 overflow-x-hidden' style={{
         maskImage, WebkitMaskImage: maskImage,
         whiteSpace: 'nowrap',
       }}>
-        <span className={available ? 'text-blue-500' : ''}>
+        <span
+          className={available ? 'text-blue-500 cursor-pointer hover:underline' : ''}
+          onClick={() => {
+            if (available) {
+              download_api.open(item.id);
+            }
+          }}
+        >
           {errored ? <del>{basename}</del> : basename}
         </span>
       </div>
       {item.state === 'in_progress'
         ? <div className='w-full relative bg-gray-300 rounded-full'>
-          <div className='h-1 bg-sky-500 rounded-full transition-all duration-300' style={{
+          <div className='h-0.5 bg-sky-500 rounded-full transition-all duration-300' style={{
             width: `${item.bytesReceived / item.totalBytes * 100}%`,
           }}/>
         </div>
-        : <div className='h-1' />
+        : <div className='h-0.5' />
       }
-      <div className='flex flex-row flex-nowrap text-xs'>
+      <div className='flex flex-row flex-nowrap text-xs items-center'>
         <div className='mr-1'>
           {(item.state === 'in_progress' && !item.paused && `${humanSize(speed)}/s`)
             || (item.state == 'complete' && !item.exists && `Deleted`)
@@ -125,7 +140,7 @@ function Item({ item: _item, onChange }: { item: DownloadItem, onChange: (cb: (d
             : ''
             }${humanSize(item.fileSize)}`}
         </div>
-        <div>
+        <div className='mr-1'>
           {item.state == 'in_progress' && !item.paused ? <IconButton
             icon={faPause}
             onClick={() => download_api.pause(item.id)}
@@ -138,9 +153,17 @@ function Item({ item: _item, onChange }: { item: DownloadItem, onChange: (cb: (d
           /> : available ? <IconButton
             icon={faFolderOpen}
             onClick={() => download_api.show(item.id)}
-          /> : <a href={item.url} target='_blank' className='hover:text-black dark:hover:text-white'>
-            <FontAwesomeIcon icon={faLink} />
-          </a>}
+          /> : <IconButton
+            tag='a'
+            icon={faLink}
+            buttonRest={{
+              href: item.url,
+              target: '_blank',
+            }}
+            className='hover:text-black dark:hover:text-white'
+          />}
+        </div>
+        <div>
           {available ? <IconButton
             icon={faTrashCan}
             onClick={() => download_api.removeFile(item.id)}
@@ -181,6 +204,7 @@ function App() {
       setItems([item, ...items.current]);
     });
     download_api.onChanged.addListener((delta) => {
+      chrome.action.setBadgeText({ text: '' });
       handleChange.current!.get(delta.id)?.(delta);
     });
     download_api.onErased.addListener((id) => {

@@ -44,7 +44,7 @@ async function updateIcon() {
   const new_progress = all !== 0 ? cnt / all : null;
   await chrome.action.setIcon({ imageData: drawIcon(new_progress) });
   if (last_progress !== null && new_progress === null) {
-    chrome.action.setBadgeBackgroundColor({ color: '#008800' });
+    chrome.action.setBadgeBackgroundColor({ color: '#008000' });
     chrome.action.setBadgeTextColor({ color: '#ffffff' });
     chrome.action.setBadgeText({ text: '+' });
   }

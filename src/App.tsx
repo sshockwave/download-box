@@ -1,6 +1,6 @@
-import { useEffect, useReducer, useState, useRef } from 'react'
+import { useEffect, useReducer, useState, useRef, MouseEventHandler } from 'react'
 import { FontAwesomeIcon, FontAwesomeIconProps } from '@fortawesome/react-fontawesome';
-import { faFolderOpen, faPause, faPlay, faLink, faUpRightFromSquare, faXmark, faTrashCan, faSearch, faDownload } from '@fortawesome/free-solid-svg-icons';
+import { faFolderOpen, faPause, faPlay, faLink, faUpRightFromSquare, faXmark, faTrashCan, faSearch, faCircleCheck, faStop } from '@fortawesome/free-solid-svg-icons';
 
 type DownloadItem = chrome.downloads.DownloadItem;
 type DownloadDelta = chrome.downloads.DownloadDelta;
@@ -19,81 +19,14 @@ function humanSize(bytes: number) {
   return `${i === 0 ? bytes : bytes.toFixed(2)}${units[i]}`;
 }
 
-function IconButton({ icon, onClick, buttonClass, ...rest }: FontAwesomeIconProps & { onClick?: () => void, buttonClass?: string }) {
-  return <button onClick={onClick} className={buttonClass}>
+function IconButton({ icon, onClick, buttonClass, ...rest }: FontAwesomeIconProps & { onClick?: MouseEventHandler<HTMLButtonElement>, buttonClass?: string }) {
+  return <button onClick={(ev) => {
+    ev.stopPropagation();
+    onClick?.(ev);
+  }} className={`hover:text-black dark:hover:text-white ${buttonClass}`}>
     <FontAwesomeIcon icon={icon} fixedWidth {...rest} />
   </button>;
 }
-
-const actions = {
-  in_progress(item: DownloadItem) {
-    return <>
-      {item.paused ? <IconButton
-        icon={faPlay}
-        onClick={() => {
-          download_api.resume(item.id);
-        }}
-      /> : <IconButton
-        icon={faPause}
-        onClick={() => {
-        download_api.pause(item.id);
-      }}
-      />}
-      <IconButton icon={faXmark} onClick={() => {
-        download_api.cancel(item.id);
-      }}/>
-    </>;
-  },
-  interrupted(item: DownloadItem) {
-    return <>
-      {item.canResume ? <IconButton
-      icon={faPlay}
-      onClick={() => {
-      download_api.resume(item.id);
-      }}
-    /> : <a href={item.url} target='_blank'>
-      <FontAwesomeIcon icon={faLink} />
-    </a>}
-      <IconButton
-        icon={faXmark}
-        onClick={() => {
-          download_api.erase({
-            id: item.id,
-          });
-        }}
-      />
-    </>;
-  },
-  complete(item: DownloadItem, render: () => void) {
-    return item.exists ? <>
-      <IconButton
-        icon={faFolderOpen}
-        onClick={() => {
-        download_api.show(item.id);
-        }}
-      />
-      <IconButton
-        icon={faTrashCan}
-        onClick={() => {
-        download_api.removeFile(item.id);
-        render();
-        }}
-      />
-    </> : <>
-      <a href={item.url} target='_blank'>
-        <FontAwesomeIcon icon={faLink} />
-      </a>
-      <IconButton
-        icon={faXmark}
-        onClick={() => {
-          download_api.erase({
-            id: item.id,
-          });
-        }}
-      />
-    </>;
-  },
-};
 
 const placeholder_gif = 'data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=';
 function Item({ item: _item, onChange }: { item: DownloadItem, onChange: (cb: (delta: DownloadDelta) => void) => void }) {
@@ -154,9 +87,8 @@ function Item({ item: _item, onChange }: { item: DownloadItem, onChange: (cb: (d
   const maskImage = 'linear-gradient(to right, #000 70%, transparent 100%)';
   return <div className={`
     flex flex-row flex-nowrap p-2 space-x-2 items-center
-    hover:bg-slate-100
-    ${errored ? 'text-black/30' : ''}
-    ${available ? 'cursor-pointer' : ''}
+    ${errored ? 'text-black/30 dark:text-white/30' : ''}
+    ${available ? 'cursor-pointer hover:underline' : ''}
   `} onClick={() => {
     if (available) {
       download_api.open(item.id);
@@ -194,11 +126,31 @@ function Item({ item: _item, onChange }: { item: DownloadItem, onChange: (cb: (d
             }${humanSize(item.fileSize)}`}
         </div>
         <div>
-    {item.danger !== 'safe' && item.danger !== 'accepted' ? <button
+          {item.state == 'in_progress' && !item.paused ? <IconButton
+            icon={faPause}
+            onClick={() => download_api.pause(item.id)}
+          /> : item.canResume ? <IconButton
+            icon={faPlay}
+            onClick={() => download_api.resume(item.id)}
+          /> : item.danger !== 'safe' && item.danger !== 'accepted' ? <IconButton
+            icon={faCircleCheck}
       onClick={() => download_api.acceptDanger(item.id)}
-    >
-      accept danger
-    </button> : actions[item.state](item, render)}
+          /> : available ? <IconButton
+            icon={faFolderOpen}
+            onClick={() => download_api.show(item.id)}
+          /> : <a href={item.url} target='_blank' className='hover:text-black dark:hover:text-white'>
+            <FontAwesomeIcon icon={faLink} />
+          </a>}
+          {available ? <IconButton
+            icon={faTrashCan}
+            onClick={() => download_api.removeFile(item.id)}
+          /> : item.state == 'in_progress' ? <IconButton
+            icon={faStop}
+            onClick={() => download_api.cancel(item.id)}
+          /> : <IconButton
+            icon={faXmark}
+            onClick={() => download_api.erase({ id: item.id })}
+          />}
         </div>
       </div>
     </div>
@@ -235,7 +187,7 @@ function App() {
       setItems(items.current.filter((item) => item.id !== id));
     });
   }, []);
-  return <div className='w-72 font-sans text-sm'>
+  return <div className='w-80 font-sans text-sm'>
     <div className='flex flex-row flex-nowrap p-2'>
       <div className='mr-2'>
         <FontAwesomeIcon icon={faSearch} className='w-8' />
@@ -243,7 +195,7 @@ function App() {
       <input
         type='search'
         placeholder='search'
-        className='grow mr-2 outline-none'
+        className='grow mr-2 outline-none bg-transparent'
         onChange={(e) => {
           const query = e.target.value === '' ? {} : {
             query: [e.target.value],

@@ -1,6 +1,6 @@
-import { useEffect, useReducer, useState, useRef, MouseEventHandler } from 'react'
+import { useEffect, useReducer, useState, useRef } from 'react'
 import { FontAwesomeIcon, FontAwesomeIconProps } from '@fortawesome/react-fontawesome';
-import { faFolderOpen, faPause, faPlay, faLink, faUpRightFromSquare, faXmark, faTrashCan, faSearch, faCircleCheck, faStop, faTrashCanArrowUp, faFolder } from '@fortawesome/free-solid-svg-icons';
+import { faFolderOpen, faPause, faPlay, faLink, faUpRightFromSquare, faXmark, faTrashCan, faSearch, faCircleCheck, faStop } from '@fortawesome/free-solid-svg-icons';
 import classes from './App.module.css';
 
 type DownloadItem = chrome.downloads.DownloadItem;
@@ -98,23 +98,24 @@ function Item({ item: _item, onChange }: { item: DownloadItem, onChange: (cb: (d
   const errored = item.state === 'interrupted' || item.state === 'complete' && !item.exists;
   const basename = item.filename.split('/').pop();
   const maskImage = 'linear-gradient(to right, #000 70%, transparent 100%)';
+  function open_file() {
+    if (available) {
+      download_api.open(item.id);
+    }
+  }
   return <div className={`
-    flex flex-row flex-nowrap py-2 items-center justify-evenly
+    flex flex-row flex-nowrap my-3 items-center justify-evenly
     ${errored ? 'text-black/30 dark:text-white/30' : ''}
   `}>
-    <img src={icon} className={`w-8 h-8 ${errored ? 'grayscale opacity-30' : ''}`} />
+    <img src={icon} className={`w-8 h-8 cursor-pointer ${errored ? 'grayscale opacity-30' : ''}`} onClick={open_file}/>
     <div className='relative'>
-      <div className='mb-0 w-64 overflow-x-hidden' style={{
+      <div className='w-60 overflow-x-hidden' style={{
         maskImage, WebkitMaskImage: maskImage,
         whiteSpace: 'nowrap',
       }}>
         <span
           className={available ? 'text-blue-500 cursor-pointer hover:underline' : ''}
-          onClick={() => {
-            if (available) {
-              download_api.open(item.id);
-            }
-          }}
+          onClick={open_file}
         >
           {errored ? <del>{basename}</del> : basename}
         </span>
@@ -211,15 +212,17 @@ function App() {
       setItems(items.current.filter((item) => item.id !== id));
     });
   }, []);
-  return <div className='w-80 font-sans text-sm'>
-    <div className='flex flex-row flex-nowrap p-2'>
-      <div className='mr-2'>
-        <FontAwesomeIcon icon={faSearch} className='w-8' />
-      </div>
+  return <div className='w-72 font-sans text-sm'>
+    <div className='flex flex-row flex-nowrap m-3 items-center'>
+      <div className='grow mr-3 relative'>
+        <FontAwesomeIcon icon={faSearch} className='h-4 absolute left-2 top-2' fixedWidth />
       <input
         type='search'
-        placeholder='search'
-        className='grow mr-2 outline-none bg-transparent'
+        placeholder='Search'
+        className={`w-full outline-none pl-8 pr-2 h-8 rounded-full
+          bg-gray-100 hover:bg-gray-200 focus:bg-gray-300
+          dark:bg-gray-900 dark:hover:bg-gray-800 dark:focus:bg-gray-700
+        `}
         onChange={(e) => {
           const query = e.target.value === '' ? {} : {
             query: [e.target.value],
@@ -227,8 +230,8 @@ function App() {
           download_api.search(query).then(setItems);
         }}
       />
+      </div>
       <IconButton
-        buttonClass='ml-auto'
         icon={faUpRightFromSquare}
         onClick={() => chrome.tabs.create({
           url: 'chrome://downloads/',
